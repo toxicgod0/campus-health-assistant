@@ -3,9 +3,13 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import GoogleAuthButton from '@/components/GoogleAuthButton';
+
+const USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/;
 
 export default function SignUp() {
   const router = useRouter();
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -18,9 +22,36 @@ export default function SignUp() {
     setError(null);
     setMessage(null);
 
+    const trimmedUsername = username.trim();
+
+    if (trimmedUsername.length < 3) {
+      setError('Username must be at least 3 characters long.');
+      setLoading(false);
+      return;
+    }
+
+    if (trimmedUsername.length > 24) {
+      setError('Username must be 24 characters or less.');
+      setLoading(false);
+      return;
+    }
+
+    if (!USERNAME_PATTERN.test(trimmedUsername)) {
+      setError('Use only letters, numbers, and underscores in the username.');
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          username: trimmedUsername,
+          display_name: trimmedUsername,
+          username_change_used: false,
+        },
+      },
     });
 
     if (error) {
@@ -29,7 +60,7 @@ export default function SignUp() {
       router.push('/dashboard');
     } else {
       setMessage(
-        'Account created. Please confirm your email before logging in, or disable Confirm Email in Supabase while testing.'
+        'Account created, but Supabase did not return a session yet. If this account was created while Confirm Email was enabled, confirm it first or recreate it now that confirmations are off.'
       );
     }
 
@@ -56,6 +87,14 @@ export default function SignUp() {
           tools in a few steps.
         </p>
 
+        <GoogleAuthButton mode="signup" />
+
+        <div className="mt-6 flex items-center gap-3 text-xs uppercase tracking-[0.24em] text-slate-400">
+          <span className="h-px flex-1 bg-slate-200" />
+          Or sign up with email
+          <span className="h-px flex-1 bg-slate-200" />
+        </div>
+
         {error && (
           <p className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -68,12 +107,30 @@ export default function SignUp() {
         )}
 
         <label className="mt-6 block text-sm font-semibold text-slate-700">
-          University Email
+          Username
+        </label>
+        <input
+          type="text"
+          required
+          minLength={3}
+          maxLength={24}
+          placeholder="e.g. afya_star"
+          className="mt-2 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
+
+        <p className="mt-2 text-xs leading-5 text-slate-500">
+          Letters, numbers, and underscores only.
+        </p>
+
+        <label className="mt-5 block text-sm font-semibold text-slate-700">
+          Email address
         </label>
         <input
           type="email"
           required
-          placeholder="you@maseno.ac.ke"
+          placeholder="you@example.com"
           className="mt-2 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -107,8 +164,9 @@ export default function SignUp() {
         </p>
 
         <p className="mt-3 text-center text-xs leading-5 text-slate-500">
-          If email confirmation is enabled in Supabase, signup creates the
-          account first and signs the user in only after confirmation.
+          Google sign-in skips the password step, while email sign-up depends on
+          your current Supabase confirmation settings. Users who join with
+          Google can set a username from the dashboard.
         </p>
       </form>
     </div>

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import GoogleAuthButton from '@/components/GoogleAuthButton';
 
 export default function Login() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function Login() {
     if (error) {
       if (error.message.toLowerCase().includes('email not confirmed')) {
         setError(
-          'Your account exists, but the email address has not been confirmed yet. Confirm it first, or disable Confirm Email in Supabase while testing.'
+          'This account still shows as unconfirmed in Supabase. If it was created before you disabled Confirm Email, you may need to confirm it manually or create the account again.'
         );
       } else {
         setError(error.message);
@@ -56,6 +57,14 @@ export default function Login() {
           records from one secure dashboard.
         </p>
 
+        <GoogleAuthButton mode="login" />
+
+        <div className="mt-6 flex items-center gap-3 text-xs uppercase tracking-[0.24em] text-slate-400">
+          <span className="h-px flex-1 bg-slate-200" />
+          Or continue with email
+          <span className="h-px flex-1 bg-slate-200" />
+        </div>
+
         {error && (
           <p className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -63,12 +72,12 @@ export default function Login() {
         )}
 
         <label className="mt-6 block text-sm font-semibold text-slate-700">
-          University Email
+          Email address
         </label>
         <input
           type="email"
           required
-          placeholder="you@maseno.ac.ke"
+          placeholder="you@example.com"
           className="mt-2 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -101,8 +110,8 @@ export default function Login() {
         </p>
 
         <p className="mt-3 text-center text-xs leading-5 text-slate-500">
-          If Supabase email confirmation is enabled, you must confirm the email
-          before password login will work.
+          Password login works immediately only for accounts that Supabase
+          considers confirmed.
         </p>
       </form>
     </div>
