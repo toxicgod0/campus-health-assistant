@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // To switch between cloud and local, change AI_PROVIDER in .env.local.
 // cloud → calls HuggingFace router (internet required, uses free quota)
 // local → calls the Python server running on this PC at localhost:8000
-const AI_PROVIDER = process.env.AI_PROVIDER ?? 'cloud';
+const AI_PROVIDER = 'local'; // hardcoded while fixing env var loading
 
 const HF_TOKEN = process.env.HUGGINGFACE_API_TOKEN;
 const MODEL = 'google/medgemma-4b-it';
