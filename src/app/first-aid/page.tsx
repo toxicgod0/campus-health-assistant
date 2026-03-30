@@ -2,10 +2,16 @@
 
 import AppointmentCountdownBanner from '@/components/AppointmentCountdownBanner';
 import { useAuth } from '@/components/SupabaseProvider';
-import { buildFirstAidGuidance } from '@/lib/healthAssistant';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+type FirstAidResult = {
+  summary: string;
+  tips: string[];
+  getHelp: string[];
+  note: string;
+};
 
 const PROBLEMS = [
   { value: 'bruises', label: 'Bruises' },
@@ -21,7 +27,9 @@ export default function FirstAidPage() {
   const router = useRouter();
   const [problem, setProblem] = useState('bruises');
   const [details, setDetails] = useState('');
-  const [result, setResult] = useState<ReturnType<typeof buildFirstAidGuidance> | null>(null);
+  const [result, setResult] = useState<FirstAidResult | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -54,9 +62,25 @@ export default function FirstAidPage() {
             </p>
 
             <form
-              onSubmit={(event) => {
+              onSubmit={async (event) => {
                 event.preventDefault();
-                setResult(buildFirstAidGuidance({ problem, details }));
+                setAiLoading(true);
+                setAiError(null);
+                setResult(null);
+                try {
+                  const res = await fetch('/api/health-ai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'firstaid', problem, details }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error ?? 'Request failed');
+                  setResult(data);
+                } catch (err) {
+                  setAiError(err instanceof Error ? err.message : 'Something went wrong');
+                } finally {
+                  setAiLoading(false);
+                }
               }}
               className="mt-8 space-y-6"
             >
@@ -92,9 +116,10 @@ export default function FirstAidPage() {
 
               <button
                 type="submit"
-                className="rounded-full bg-teal-700 px-6 py-3 text-sm font-semibold text-white transition hover:bg-teal-800"
+                disabled={aiLoading}
+                className="rounded-full bg-teal-700 px-6 py-3 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:opacity-60"
               >
-                Get first-aid tips
+                {aiLoading ? 'Analysing…' : 'Get first-aid tips'}
               </button>
             </form>
           </section>
@@ -103,6 +128,18 @@ export default function FirstAidPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-teal-700">
               Guidance Panel
             </p>
+
+            {aiError && (
+              <div className="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-700">
+                {aiError}
+              </div>
+            )}
+
+            {aiLoading && (
+              <div className="mt-5 rounded-3xl bg-white p-5 text-sm leading-7 text-slate-500 shadow-sm">
+                MedGemma is preparing first-aid guidance…
+              </div>
+            )}
 
             {result ? (
               <div className="mt-5 space-y-5">

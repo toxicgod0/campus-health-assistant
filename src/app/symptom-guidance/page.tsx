@@ -2,10 +2,16 @@
 
 import AppointmentCountdownBanner from '@/components/AppointmentCountdownBanner';
 import { useAuth } from '@/components/SupabaseProvider';
-import { buildSymptomGuidance } from '@/lib/healthAssistant';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+type SymptomResult = {
+  urgency: string;
+  likelyConcern: string;
+  recommendations: string[];
+  note: string;
+};
 
 const COMMON_SYMPTOMS = [
   'Headache',
@@ -25,7 +31,9 @@ export default function SymptomGuidancePage() {
   const [additionalDetails, setAdditionalDetails] = useState('');
   const [duration, setDuration] = useState('today');
   const [severity, setSeverity] = useState('mild');
-  const [result, setResult] = useState<ReturnType<typeof buildSymptomGuidance> | null>(null);
+  const [result, setResult] = useState<SymptomResult | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -43,16 +51,31 @@ export default function SymptomGuidancePage() {
     );
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setResult(
-      buildSymptomGuidance({
-        symptoms: selectedSymptoms,
-        additionalDetails,
-        duration,
-        severity,
-      })
-    );
+    setAiLoading(true);
+    setAiError(null);
+    setResult(null);
+    try {
+      const res = await fetch('/api/health-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'symptom',
+          symptoms: selectedSymptoms,
+          additionalDetails,
+          duration,
+          severity,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Request failed');
+      setResult(data);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   return (
@@ -151,9 +174,10 @@ export default function SymptomGuidancePage() {
 
               <button
                 type="submit"
-                className="rounded-full bg-teal-700 px-6 py-3 text-sm font-semibold text-white transition hover:bg-teal-800"
+                disabled={aiLoading}
+                className="rounded-full bg-teal-700 px-6 py-3 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:opacity-60"
               >
-                Submit symptoms
+                {aiLoading ? 'Analysing…' : 'Submit symptoms'}
               </button>
             </form>
           </section>
@@ -162,6 +186,18 @@ export default function SymptomGuidancePage() {
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-teal-700">
               Assistant Output
             </p>
+
+            {aiError && (
+              <div className="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-700">
+                {aiError}
+              </div>
+            )}
+
+            {aiLoading && (
+              <div className="mt-5 rounded-3xl bg-white p-5 text-sm leading-7 text-slate-500 shadow-sm">
+                MedGemma is reviewing your symptoms…
+              </div>
+            )}
 
             {result ? (
               <div className="mt-5 space-y-5">
