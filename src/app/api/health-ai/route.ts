@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
-// To switch between cloud and local, change AI_PROVIDER in .env.local.
-// cloud → calls HuggingFace router (internet required, uses free quota)
-// local → calls the Python server running on this PC at localhost:8000
-const AI_PROVIDER = 'local'; // hardcoded while fixing env var loading
+// To switch: change the value below to 'local' or 'cloud'
+const AI_PROVIDER = 'cloud';
 
-const HF_TOKEN = process.env.HUGGINGFACE_API_TOKEN;
 const MODEL = 'google/medgemma-4b-it';
-const CLOUD_URL = `https://router.huggingface.co/models/${MODEL}/v1/chat/completions`;
-const LOCAL_URL = 'http://localhost:8000/chat';
+const CLOUD_URL = `https://router.huggingface.co/hf-inference/models/${MODEL}/v1/chat/completions`;
+const LOCAL_URL = 'http://127.0.0.1:8000/chat';
 
 // ─── Shared message type ──────────────────────────────────────────────────────
 type Message = { role: 'system' | 'user'; content: string };
@@ -17,11 +14,11 @@ type Message = { role: 'system' | 'user'; content: string };
 // ─── Core caller — picks cloud or local automatically ─────────────────────────
 async function callMedGemma(messages: Message[]): Promise<string> {
   if (AI_PROVIDER === 'local') {
-    // Calls the Python FastAPI server (server.py in medgemma-backend)
     const res = await fetch(LOCAL_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages }),
+      signal: AbortSignal.timeout(10 * 60 * 1000),
     });
     if (!res.ok) {
       const err = await res.text();
@@ -31,12 +28,20 @@ async function callMedGemma(messages: Message[]): Promise<string> {
     return data.response ?? '';
   }
 
-  // Default: cloud (HuggingFace router)
-  if (!HF_TOKEN) throw new Error('HUGGINGFACE_API_TOKEN is not set in .env.local');
+  // Cloud: read token at REQUEST TIME (not module load) to fix Turbopack issue
+  const token = process.env.HUGGINGFACE_API_TOKEN;
+  if (!token) {
+    throw new Error(
+      'HUGGINGFACE_API_TOKEN not found. ' +
+      'Env vars detected: ' + Object.keys(process.env).filter(k => k.includes('HUGGING') || k.includes('AI_')).join(', ') +
+      ' | Try starting with: $env:HUGGINGFACE_API_TOKEN="hf_your_token"; npm run dev'
+    );
+  }
+
   const res = await fetch(CLOUD_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${HF_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -57,8 +62,12 @@ async function callMedGemma(messages: Message[]): Promise<string> {
 // ─── JSON extractor ────────────────────────────────────────────────────────────
 function extractJSON(raw: string) {
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('MedGemma did not return a valid JSON response. Raw: ' + raw.slice(0, 200));
-  return JSON.parse(match[0]);
+  if (!match) throw new Error('MedGemma did not return valid JSON. Raw: ' + raw.slice(0, 500));
+  try {
+    return JSON.parse(match[0]);
+  } catch {
+    throw new Error('JSON parse failed. Extracted: ' + match[0].slice(0, 500));
+  }
 }
 
 // ─── Route handler ─────────────────────────────────────────────────────────────
@@ -67,7 +76,6 @@ export async function POST(req: NextRequest) {
   const { type } = body;
 
   try {
-    // ── Symptom guidance ──────────────────────────────────────────────────────
     if (type === 'symptom') {
       const { symptoms, additionalDetails, duration, severity } = body;
 
@@ -75,25 +83,28 @@ export async function POST(req: NextRequest) {
         {
           role: 'system',
           content:
-            'You are MedGemma, a clinical medical AI embedded in a university campus health platform. ' +
-            'Your job is to assess a student\'s reported symptoms carefully and provide personalised guidance. ' +
-            'Always reason about the specific symptoms described before concluding. Be direct, compassionate, and specific. ' +
-            'Never give generic advice — tie every point to the actual symptoms and details the student provided.',
+            'You are MedGemma, a medical AI at a university health centre. ' +
+            'You provide thorough, clinically informed symptom assessments. ' +
+            'Always respond with ONLY a raw JSON object — no markdown fences, no extra text.',
         },
         {
           role: 'user',
           content:
-            `A student at Maseno University has reported the following health situation:\n\n` +
-            `Symptoms: ${symptoms.length > 0 ? symptoms.join(', ') : 'not specified'}\n` +
-            `Additional details: ${additionalDetails || 'none provided'}\n` +
-            `Duration: ${duration}\n` +
-            `Severity: ${severity}\n\n` +
-            `Based on these specific symptoms and details, assess the urgency and provide guidance.\n\n` +
-            `Respond with ONLY a raw JSON object — no markdown, no explanation outside the JSON:\n` +
+            `Student health report:\n` +
+            `- Symptoms: ${symptoms.join(', ') || 'not specified'}\n` +
+            `- Extra details: ${additionalDetails || 'none'}\n` +
+            `- How long: ${duration}\n` +
+            `- Severity: ${severity}\n\n` +
+            `Analyse these symptoms. Respond with a JSON object:\n` +
             `{\n` +
-            `  "urgency": "Urgent attention suggested" or "Medical review recommended soon" or "Monitor and use supportive care",\n` +
-            `  "likelyConcern": "2-3 sentences specifically about what these symptoms may indicate and why",\n` +
-            `  "recommendations": ["specific step tied to their symptoms", "specific step 2", "specific step 3"]\n` +
+            `  "urgency": "<choose EXACTLY ONE: Urgent attention suggested | Medical review recommended soon | Monitor and use supportive care>",\n` +
+            `  "likelyConcern": "<4-6 detailed sentences: what could be causing these symptoms, how they relate to each other, what the duration and severity suggest, and risk factors>",\n` +
+            `  "recommendations": [\n` +
+            `    "<detailed recommendation 1 with reasoning>",\n` +
+            `    "<detailed recommendation 2 with reasoning>",\n` +
+            `    "<detailed recommendation 3 with reasoning>",\n` +
+            `    "<detailed recommendation 4: when to escalate to emergency care>"\n` +
+            `  ]\n` +
             `}`,
         },
       ];
@@ -105,11 +116,10 @@ export async function POST(req: NextRequest) {
         urgency: parsed.urgency,
         likelyConcern: parsed.likelyConcern,
         recommendations: parsed.recommendations,
-        note: `Assessed by MedGemma (${AI_PROVIDER} mode). This is preliminary AI guidance, not a medical diagnosis.`,
+        note: `Assessed by MedGemma (${AI_PROVIDER}). Preliminary AI guidance, not a medical diagnosis.`,
       });
     }
 
-    // ── First-aid guidance ────────────────────────────────────────────────────
     if (type === 'firstaid') {
       const { problem, details } = body;
 
@@ -117,23 +127,26 @@ export async function POST(req: NextRequest) {
         {
           role: 'system',
           content:
-            'You are MedGemma, a clinical medical AI embedded in a university campus health platform. ' +
-            'Provide precise, actionable first-aid guidance tailored to the exact situation described. ' +
-            'Be specific — do not give generic steps that could apply to any injury. ' +
-            'Base every tip on the details the student has provided.',
+            'You are MedGemma, a medical AI at a university health centre. ' +
+            'You provide thorough, clinically informed first-aid guidance. ' +
+            'Always respond with ONLY a raw JSON object — no markdown fences, no extra text.',
         },
         {
           role: 'user',
           content:
-            `A student at Maseno University needs first-aid guidance.\n\n` +
-            `Problem type: ${problem}\n` +
-            `Details: ${details || 'none provided'}\n\n` +
-            `Provide specific first-aid advice for this exact situation.\n\n` +
-            `Respond with ONLY a raw JSON object — no markdown, no explanation outside the JSON:\n` +
+            `A student needs first-aid help.\n` +
+            `- Problem: ${problem}\n` +
+            `- Details: ${details || 'none provided'}\n\n` +
+            `Provide detailed first-aid guidance. Respond with a JSON object:\n` +
             `{\n` +
-            `  "summary": "2-3 sentences assessing this specific situation and the immediate priority",\n` +
-            `  "tips": ["specific step 1 for this case", "specific step 2", "specific step 3"],\n` +
-            `  "getHelp": ["specific warning sign to watch for and exactly when to seek emergency help"]\n` +
+            `  "summary": "<3-4 sentences assessing the situation and immediate priority>",\n` +
+            `  "tips": [\n` +
+            `    "<detailed step 1 with reasoning>",\n` +
+            `    "<detailed step 2 with reasoning>",\n` +
+            `    "<detailed step 3 with reasoning>",\n` +
+            `    "<detailed step 4: what NOT to do and why>"\n` +
+            `  ],\n` +
+            `  "getHelp": ["<detailed warning signs requiring immediate professional attention>"]\n` +
             `}`,
         },
       ];
@@ -145,13 +158,18 @@ export async function POST(req: NextRequest) {
         summary: parsed.summary,
         tips: parsed.tips,
         getHelp: parsed.getHelp,
-        note: `Assessed by MedGemma (${AI_PROVIDER} mode). Not a substitute for emergency care.`,
+        note: `Assessed by MedGemma (${AI_PROVIDER}). Not a substitute for emergency care.`,
       });
     }
 
     return NextResponse.json({ error: 'Invalid request type.' }, { status: 400 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
+    let message = 'Unknown error';
+    if (err instanceof Error) {
+      message = err.message;
+      const cause = (err as unknown as { cause?: Error }).cause;
+      if (cause) message += ' | Cause: ' + cause.message;
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

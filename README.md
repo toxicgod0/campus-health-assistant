@@ -1,40 +1,95 @@
-<<<<<<< HEAD
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Campus Health Assistant
+
+A student health support platform built for **Maseno University**. It provides AI-powered symptom assessment, first-aid guidance, appointment management, and a private health journal — all in one calm, accessible interface.
+
+## Features
+
+- **Symptom Guidance** — Describe your symptoms and receive an AI-assessed urgency level, likely concern analysis, and personalised recommendations powered by MedGemma.
+- **First-Aid Help** — Get step-by-step first-aid instructions tailored to the specific situation, with clear guidance on when to seek emergency care.
+- **Appointment Booking** — Schedule and track upcoming clinic visits with countdown reminders.
+- **Health Journal** — Log mood, energy, symptoms, and self-care plans in a private, timestamped journal.
+- **Authentication** — Secure login via Google OAuth or email/password, with personalised usernames.
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 16 (App Router), React 19, Tailwind CSS v4 |
+| Backend | Next.js API Routes, Supabase (Auth + PostgreSQL) |
+| AI Model | Google MedGemma 4B-IT (local via PyTorch or cloud via HuggingFace) |
+| Deployment | Vercel |
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- A Supabase project with Auth and database configured
+- Python 3.10+ (only for local AI mode)
+
+### Installation
+
+```bash
+git clone https://github.com/toxicgod0/campus-health-assistant.git
+cd campus-health-assistant
+npm install
+```
+
+### Environment Variables
+
+Create a `.env.local` file:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your_supabase_anon_key
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+HUGGINGFACE_API_TOKEN=your_hf_token
+AI_PROVIDER=cloud
+```
+
+### Run the App
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Local AI Mode (Optional)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+To run MedGemma locally instead of using the cloud API:
 
-## Learn More
+1. Set `AI_PROVIDER=local` in `.env.local`
+2. Start the Python model server:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+cd medgemma-backend
+medgemma_env\Scripts\activate
+python server.py
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3. Wait for "Model ready" then start the Next.js app in a separate terminal.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+> Local mode requires the MedGemma model downloaded via HuggingFace and runs on CPU. Expect 3-7 minutes per response without a GPU.
 
-## Deploy on Vercel
+## Project Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/
+  app/
+    (auth)/          Login and signup pages
+    api/health-ai/   AI backend route (cloud/local switch)
+    dashboard/       Main hub after login
+    symptom-guidance/ Symptom assessment tool
+    first-aid/       First-aid guidance tool
+    appointments/    Appointment booking and tracking
+    health-journal/  Private health journal
+  components/        Reusable UI components
+  lib/               Health logic and Supabase client
+  utils/supabase/    Server and client Supabase helpers
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-=======
-# campus-health-assistant
->>>>>>> 02bf0fa0f7e6ee84a88f7d26c32393a3438e9f43
+## License
+
+This project is part of an academic initiative at Maseno University.
