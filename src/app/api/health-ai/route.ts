@@ -1,47 +1,27 @@
+import '@/lib/fetchConfig';
 import { NextRequest, NextResponse } from 'next/server';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
-// To switch: change the value below to 'local' or 'cloud'
-const AI_PROVIDER = 'cloud';
-
-const MODEL = 'google/medgemma-4b-it';
-const CLOUD_URL = `https://router.huggingface.co/hf-inference/models/${MODEL}/v1/chat/completions`;
-const LOCAL_URL = 'http://127.0.0.1:8000/chat';
+const MODEL = 'medgemma:4b';
 
 // ─── Shared message type ──────────────────────────────────────────────────────
 type Message = { role: 'system' | 'user'; content: string };
 
-// ─── Core caller — picks cloud or local automatically ─────────────────────────
-async function callMedGemma(messages: Message[]): Promise<string> {
-  if (AI_PROVIDER === 'local') {
-    const res = await fetch(LOCAL_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages }),
-      signal: AbortSignal.timeout(10 * 60 * 1000),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Local server error ${res.status}: ${err}`);
-    }
-    const data = await res.json();
-    return data.response ?? '';
-  }
+// ─── Core caller — calls our self-hosted Gemma 4 server ───────────────────────
+async function callGemma(messages: Message[]): Promise<string> {
+  const serverUrl = process.env.GEMMA_SERVER_URL;
+  const apiKey = process.env.GEMMA_API_KEY;
 
-  // Cloud: read token at REQUEST TIME (not module load) to fix Turbopack issue
-  const token = process.env.HUGGINGFACE_API_TOKEN;
-  if (!token) {
+  if (!serverUrl || !apiKey) {
     throw new Error(
-      'HUGGINGFACE_API_TOKEN not found. ' +
-      'Env vars detected: ' + Object.keys(process.env).filter(k => k.includes('HUGGING') || k.includes('AI_')).join(', ') +
-      ' | Try starting with: $env:HUGGINGFACE_API_TOKEN="hf_your_token"; npm run dev'
+      'GEMMA_SERVER_URL or GEMMA_API_KEY not found in environment variables.'
     );
   }
 
-  const res = await fetch(CLOUD_URL, {
+  const res = await fetch(`${serverUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -50,10 +30,12 @@ async function callMedGemma(messages: Message[]): Promise<string> {
       max_tokens: 600,
       temperature: 0.4,
     }),
+    signal: AbortSignal.timeout(10 * 60 * 1000),
   });
+
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`HuggingFace API error ${res.status}: ${err}`);
+    throw new Error(`Gemma server error ${res.status}: ${err}`);
   }
   const data = await res.json();
   return data.choices?.[0]?.message?.content ?? '';
@@ -62,7 +44,7 @@ async function callMedGemma(messages: Message[]): Promise<string> {
 // ─── JSON extractor ────────────────────────────────────────────────────────────
 function extractJSON(raw: string) {
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('MedGemma did not return valid JSON. Raw: ' + raw.slice(0, 500));
+  if (!match) throw new Error('Gemma did not return valid JSON. Raw: ' + raw.slice(0, 500));
   try {
     return JSON.parse(match[0]);
   } catch {
@@ -83,9 +65,9 @@ export async function POST(req: NextRequest) {
         {
           role: 'system',
           content:
-            'You are MedGemma, a medical AI at a university health centre. ' +
-            'You provide thorough, clinically informed symptom assessments. ' +
-            'Always respond with ONLY a raw JSON object — no markdown fences, no extra text.',
+                'You are MedGemma, a medical AI at a university health centre. ' +
+                'You provide thorough, clinically informed symptom assessments. ' +
+                'Always respond with ONLY a raw JSON object — no markdown fences, no extra text.',
         },
         {
           role: 'user',
@@ -109,14 +91,14 @@ export async function POST(req: NextRequest) {
         },
       ];
 
-      const raw = await callMedGemma(messages);
+      const raw = await callGemma(messages);
       const parsed = extractJSON(raw);
 
       return NextResponse.json({
         urgency: parsed.urgency,
         likelyConcern: parsed.likelyConcern,
         recommendations: parsed.recommendations,
-        note: `Assessed by MedGemma (${AI_PROVIDER}). Preliminary AI guidance, not a medical diagnosis.`,
+        note: `Assessed by MedGemma. Preliminary AI guidance, not a medical diagnosis.`,
       });
     }
 
@@ -127,9 +109,9 @@ export async function POST(req: NextRequest) {
         {
           role: 'system',
           content:
-            'You are MedGemma, a medical AI at a university health centre. ' +
-            'You provide thorough, clinically informed first-aid guidance. ' +
-            'Always respond with ONLY a raw JSON object — no markdown fences, no extra text.',
+                'You are MedGemma, a medical AI at a university health centre. ' +
+                'You provide thorough, clinically informed first-aid guidance. ' +
+                'Always respond with ONLY a raw JSON object — no markdown fences, no extra text.',
         },
         {
           role: 'user',
@@ -151,14 +133,14 @@ export async function POST(req: NextRequest) {
         },
       ];
 
-      const raw = await callMedGemma(messages);
+      const raw = await callGemma(messages);
       const parsed = extractJSON(raw);
 
       return NextResponse.json({
         summary: parsed.summary,
         tips: parsed.tips,
         getHelp: parsed.getHelp,
-        note: `Assessed by MedGemma (${AI_PROVIDER}). Not a substitute for emergency care.`,
+        note: `Assessed by MedGemma. Not a substitute for emergency care.`
       });
     }
 
