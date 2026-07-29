@@ -163,16 +163,6 @@ export default function Dashboard() {
                   independently.
                 </p>
               </div>
-
-              <div className="rounded-2xl bg-white/85 p-4 shadow-sm">
-                <h3 className="text-base font-semibold text-slate-900">
-                  A calm interface
-                </h3>
-                <p className="mt-2 text-sm leading-7 text-slate-600">
-                  The lighter layout is designed to feel more like a welcoming
-                  clinic front desk than a technical admin screen.
-                </p>
-              </div>
             </div>
           </aside>
         </section>
@@ -182,26 +172,6 @@ export default function Dashboard() {
             canChange={!Boolean(user?.user_metadata?.username_change_used)}
             initialUsername={user?.user_metadata?.username ?? ''}
           />
-
-          <div className="rounded-[32px] border border-white/70 bg-white/85 p-7 shadow-[0_28px_80px_rgba(15,23,42,0.08)] backdrop-blur">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-700">
-              Personal touch
-            </p>
-            <h2 className="mt-3 text-2xl font-semibold text-slate-900">
-              A more human welcome for every student
-            </h2>
-            <p className="mt-4 text-sm leading-7 text-slate-600">
-              Usernames let the app greet people in a friendlier way without
-              depending on an email address. This is especially helpful for
-              students who sign in with personal Gmail accounts or shared naming
-              patterns that do not feel personal.
-            </p>
-            <p className="mt-4 text-sm leading-7 text-slate-600">
-              I have also added a database migration file so your Supabase
-              project can store usernames in a dedicated profile record, not
-              just auth metadata, when you are ready to run it.
-            </p>
-          </div>
         </section>
       </div>
     </main>

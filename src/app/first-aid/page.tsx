@@ -57,8 +57,7 @@ export default function FirstAidPage() {
               Tell the assistant what is happening and get calm first-aid tips
             </h1>
             <p className="mt-4 text-sm leading-7 text-slate-600">
-              This gives supportive first-aid steps while we prepare for a later
-              MedGemma integration.
+              
             </p>
 
             <form

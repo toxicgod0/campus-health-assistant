@@ -96,9 +96,7 @@ export default function SymptomGuidancePage() {
               Describe how you feel and get a structured next-step review
             </h1>
             <p className="mt-4 text-sm leading-7 text-slate-600">
-              This page gives a calm, readable summary of possible urgency and
-              what to do next. It is a safe placeholder until we connect
-              MedGemma for stronger AI analysis.
+              
             </p>
 
             <form onSubmit={handleSubmit} className="mt-8 space-y-6">
